@@ -81,15 +81,15 @@ const char index_html[] PROGMEM = R"rawLiteral(
 // Simple templating engine processor.
 // See: https://github.com/me-no-dev/ESPAsyncWebServer#template-processing
 String templateProcessor(const String& var) {
-  if(var == "TIMEINTERVAL") {
+  if (var == "TIMEINTERVAL") {
     return String(lastTimeInterval);
-  } else if(var == "DELAY") {
+  } else if (var == "DELAY") {
     return String(DELAY);
-  } else if(var == "STEP") {
+  } else if (var == "STEP") {
     return String(STEP);
-  } else if(var == "MAX_DELAY") {
+  } else if (var == "MAX_DELAY") {
     return String(MAX_DELAY);
-  } else if(var == "MIN_DELAY") {
+  } else if (var == "MIN_DELAY") {
     return String(MIN_DELAY);
   } else {
     return String();
@@ -107,6 +107,21 @@ void setup() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
       request -> send_P(200, "text/html", index_html, templateProcessor);
   });
+  server.on("/update", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (request -> hasParam("interval", true)) {
+      AsyncWebParameter* p = request->getParam("interval", true);
+      
+      int newdelay = (p -> value()).toInt();
+      if (newdelay != 0 && newdelay >= MIN_DELAY) {
+        DELAY = (p -> value()).toInt();
+        Serial.println("Updated DELAY to: " + String(DELAY));
+        request -> redirect("/");
+      } else {
+        Serial.println("Received invalid new DELAY value: " + p -> value());
+        request -> send(401);
+      }
+    }
+  });
   server.begin();
 }
 
@@ -120,9 +135,9 @@ void loop() {
   // sprintf(_buffer, "%03u cm", centimeters);
   // Serial.println(_buffer);  // print distance (in cm) on serial monitor
   delay(3000);
-  Serial.println("-------------------------------------");
-  Serial.println("Number of WiFi clients: " + String(WiFi.softAPgetStationNum()));
-  Serial.println("Last TimeInterval: " + String(lastTimeInterval));
-  Serial.println("DELAY: " + String(DELAY));
-  Serial.println("-------------------------------------");
+  // Serial.println("-------------------------------------");
+  // Serial.println("Number of WiFi clients: " + String(WiFi.softAPgetStationNum()));
+  // Serial.println("Last TimeInterval: " + String(lastTimeInterval));
+  // Serial.println("DELAY: " + String(DELAY));
+  // Serial.println("-------------------------------------");
 }
