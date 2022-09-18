@@ -19,6 +19,9 @@ int RollingWindow::append(int value) {
 
 int RollingWindow::average() {
     // yes, we truncate when dividing but whatever for our use case :D
+    if (storage -> getSize() == 0) 
+        return 0;
+    
     return total / storage -> getSize();
 }
 
