@@ -146,7 +146,9 @@ const char index_html[] PROGMEM = R"rawLiteral(
         }, false);
 
         source.addEventListener('trigger', function(e) {
-          document.getElementById('lasttrigger').innerHTML = (e.data + "sec");
+          const msec = e.data
+          const sec = (parseFloat(msec) / 1000).toFixed(3);
+          document.getElementById('lasttrigger').innerHTML = (sec + " sec");
         }, false);
       }
     }, false);
@@ -343,10 +345,12 @@ void loop() {
 
   const int percentDiff = percentDifference(reading, average);
   
-  if (runDetection == false && percentDiff >= PERCENT_DIFF_TRIGGER)
+  if (runDetection == false && percentDiff >= PERCENT_DIFF_TRIGGER) {
     runDetection = true;
+    sendLog(INFO, "Reading % difference:" + String(percentDiff) + " Starting detection.");
+  }
 
-  if (runDetection) {
+  if (runDetection && detection.size() == 0) {
     // Initial measurement. Start rolling window to see if we actually have a trigger
     runDetection = true;
     prevTriggerMillis = timeSinceBoot;
