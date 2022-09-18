@@ -2,14 +2,14 @@
 #include <Ultrasonic.h>
 #include <ESP8266WiFi.h>
 #include <ESPAsyncWebServer.h>
+#include "RollingWindow.h"
 
 /*
 Core concepts:
 - EventSource for sending messages to client
 - Button on client & API here to start/stop timing
 - Logic for knowing when threshold is crossed:
-    - measure delta to previous range
-    - if significantly smaller, a threshold has been crossed
+    - Establish baseline distance
     - pause reading for a few seconds
 */
 
@@ -19,11 +19,17 @@ Core concepts:
 
 // Ranger
 #define RANGERPIN 5
-float lastTimeInterval = 0.0;
+
+RollingWindow window(20);
+
+long currentTimeInterval = 0;   // msec
+
+bool run = false;
+
 int DELAY = 100;    // msec to delay between readings
 const int STEP = 10;  // valid stepping interval in msec
-const int MAX_DELAY = 250;    // Max ranging delay
-const int MIN_DELAY = 10;   // Minimum ranging delay
+const int MAX_DELAY = 500;    // Max ranging delay
+const int MIN_DELAY = 50;   // Minimum ranging delay
 
 // Soft Access Point
 const char* ssid = "ESP8266 Timer";
@@ -38,6 +44,7 @@ Ultrasonic ultrasonic(RANGERPIN);
 
 // Webserver
 AsyncWebServer server(80);
+AsyncEventSource events("/events");
 
 /*
 * Main Logic
@@ -64,6 +71,7 @@ const char index_html[] PROGMEM = R"rawLiteral(
       <span>%TIMEINTERVAL% sec</span>
       <br>
       <br>
+      <button id="btn_startstop" type="button">%STARTSTOP%</button>
       <form action="/update" method="post">
         <label>Ranging Interval (msec)</label>
         <input type="number" id="ranging-interval" name="interval" value="%DELAY%" step="%STEP%" max="%MAX_DELAY%" min="%MIN_DELAY%"><br><br>
@@ -73,7 +81,16 @@ const char index_html[] PROGMEM = R"rawLiteral(
     </p>
   </body>
   <script>
+    document.getElementById("btn_startstop").addEventListener("click", () => {
+        let xhr = new XMLHttpRequest(), data = "start=toggle";
+        xhr.open('POST', '/update')
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        xhr.send(data)
 
+        xhr.addEventListener("load", (event) => {
+          window.location.reload(false)
+        })
+    });
   </script>
 </html>
 )rawLiteral";
@@ -82,7 +99,7 @@ const char index_html[] PROGMEM = R"rawLiteral(
 // See: https://github.com/me-no-dev/ESPAsyncWebServer#template-processing
 String templateProcessor(const String& var) {
   if (var == "TIMEINTERVAL") {
-    return String(lastTimeInterval);
+    return String(currentTimeInterval);
   } else if (var == "DELAY") {
     return String(DELAY);
   } else if (var == "STEP") {
@@ -91,6 +108,8 @@ String templateProcessor(const String& var) {
     return String(MAX_DELAY);
   } else if (var == "MIN_DELAY") {
     return String(MIN_DELAY);
+  } else if (var == "STARTSTOP") {
+    return run ? "Stop" : "Start";
   } else {
     return String();
   }
@@ -121,23 +140,39 @@ void setup() {
         request -> send(401);
       }
     }
+
+    if (request -> hasParam("start", true)) {
+      run = !run;
+      request -> send(200);
+    }
   });
+  
+  // EventSource setup
+  events.onConnect([](AsyncEventSourceClient *client) {
+    client -> send(String(currentTimeInterval).c_str(), NULL, millis(), 1000);
+  });
+  server.addHandler(&events);
   server.begin();
 }
 
 void loop() {
-  // char _buffer[7];
-  // int centimeters;
+  if (!run) {
+    delay(DELAY);
+    return;
+  }
+  
+  long timeSinceBoot = millis();
 
-  // centimeters = ultrasonic.MeasureInCentimeters();
-  // delay(DELAY);  // msec
+  int centimeters = ultrasonic.MeasureInCentimeters();
+  window.append(centimeters);
 
-  // sprintf(_buffer, "%03u cm", centimeters);
-  // Serial.println(_buffer);  // print distance (in cm) on serial monitor
-  delay(3000);
+  
+  delay(DELAY);
+
   // Serial.println("-------------------------------------");
   // Serial.println("Number of WiFi clients: " + String(WiFi.softAPgetStationNum()));
-  // Serial.println("Last TimeInterval: " + String(lastTimeInterval));
+  // Serial.println("Last TimeInterval: " + String(currentTimeInterval));
   // Serial.println("DELAY: " + String(DELAY));
+  // Serial.println("Window average:" + String(window -> average()));
   // Serial.println("-------------------------------------");
 }
