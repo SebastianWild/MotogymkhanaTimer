@@ -167,12 +167,6 @@ int percentDifference(double lhs, double rhs) {
   return abs(lhs - rhs) / ((lhs + rhs) / 2) * 100;
 }
 
-void restart() {
-  runDetection = false;
-  detection.clear();
-  window.clear();
-}
-
 /// @brief Send trigger time over EventSource connection
 /// @param triggerMillis Trigger time in msec to convert to string and send
 void sendTrigger(long triggerMillis) {
@@ -187,6 +181,16 @@ void sendLog(LogLevel level, String message) {
   Serial.println(message);
   if (logLevel >= level)
     events.send(message.c_str(), "log", millis());
+}
+
+void restart() {
+  sendLog(DEBUG, "Resetting");
+
+  runDetection = false;
+  detection.clear();
+  window.clear();
+  prevTriggerMillis = 0;
+  currentTimeInterval = 0;
 }
 
 /// Simple templating engine processor.
@@ -246,6 +250,7 @@ void setup() {
     if (request -> hasParam("start", true)) {
       run = !run;
       request -> send(200);
+      restart();
     }
 
     if (request -> hasParam("window-size", true)) {
@@ -341,7 +346,15 @@ void loop() {
   long timeSinceBoot = millis();
 
   int reading = ultrasonic.MeasureInCentimeters();
+  window.append(reading);
   int average = window.average();
+
+  // we must allow window to fill in order for our average calculation to be useful
+  if (window.size() != WINDOW_SIZE) {
+    sendLog(DEBUG, "Calibrating - Window not yet filled.");
+    delay(DELAY);
+    return;
+  }
 
   const int percentDiff = percentDifference(reading, average);
   
