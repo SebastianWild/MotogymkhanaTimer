@@ -21,3 +21,14 @@ int RollingWindow::average() {
     // yes, we truncate when dividing but whatever for our use case :D
     return total / storage -> getSize();
 }
+
+void RollingWindow::clear() {
+    SinglyLinkedList* old = storage;
+    storage = new SinglyLinkedList;
+
+    delete old;
+}
+
+int RollingWindow::size() {
+    return storage -> getSize();
+}

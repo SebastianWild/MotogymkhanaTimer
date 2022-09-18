@@ -11,7 +11,9 @@ class RollingWindow {
         SinglyLinkedList* storage;
     public:
         int append(int value);
+        void clear();
         int average();
+        int size();
         RollingWindow(int size);
 };
 
