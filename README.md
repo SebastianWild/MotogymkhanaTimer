@@ -14,7 +14,7 @@ PlatformIO should automatically fetch the various dependencies. One exception is
 Required things:
 
 - ESP8266 module
-- Grove Pi ultrasonic ranger (you must modify the [code](src\main.cpp) if using some other sensor!)
+- Grove Pi ultrasonic ranger (you must modify the [code](Arduino/src/main.cpp) if using some other sensor!)
 - Battery bank to power the device in the field
 - Some kind of case
 
@@ -28,7 +28,7 @@ Once running, connect to the ESP8266's WiFi network:
 
 Then, navigate to `http://http://192.168.4.1/` where you can see the lap time and change settings.  
 
-![Screenshot of the configuration & display webpage](Docs\Images\webpage.png)
+![Screenshot of the configuration & display webpage](Docs/Images/webpage.png)
 
 ### Lap Timer
 
