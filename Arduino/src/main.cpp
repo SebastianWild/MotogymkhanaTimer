@@ -99,10 +99,11 @@ const char index_html[] PROGMEM = R"rawLiteral(
         <br>
         <label>Log Level</label>
         <select name="log-level" id="log-level">
-          <option value="DEBUG">DEBUG</option>
-          <option value="INFO">INFO</option>
-          <option value="WARNING">WARNING</option>
-          <option value="ERROR">ERROR</option>
+          <!-- Sadly the templating engine of ESPAsyncWebServer is very basic, and I am lazy -->
+          <option value="0" %DEBUGLOGLEVEL%>DEBUG</option>
+          <option value="1" %INFOLOGLEVEL%>INFO</option>
+          <option value="2" %WARNINGLOGLEVEL%>WARNING</option>
+          <option value="3" %ERRORLOGLEVEL%>ERROR</option>
         </select>
         <br><br>
         <input type="submit" value="Update">
@@ -179,8 +180,9 @@ LogLevel logLevel = INFO;
 /// @param message The message
 void sendLog(LogLevel level, String message) {
   Serial.println(message);
-  if (logLevel >= level)
+  if (logLevel >= level) {
     events.send(message.c_str(), "log", millis());
+  }
 }
 
 void restart() {
@@ -216,6 +218,14 @@ String templateProcessor(const String& var) {
     return String(PERCENT_DIFF_TRIGGER);
   } else if (var == "AFTER_DETECTION_DELAY") {
     return String(AFTER_DETECTION_DELAY);
+  } else if (var == "DEBUGLOGLEVEL" && logLevel == DEBUG) {
+    return "selected";
+  } else if (var == "INFOLOGLEVEL" && logLevel == INFO) {
+    return "selected";
+  } else if (var == "WARNINGLOGLEVEL" && logLevel == WARNING) {
+    return "selected";
+  } else if (var == "ERRORLOGLEVEL" && logLevel == ERROR) {
+    return "selected";
   } else {
     return String();
   }
@@ -313,13 +323,13 @@ void setup() {
       AsyncWebParameter* p = request->getParam("log-level", true);
       String level = p -> value();
       // Could probably just have frontend pass int here...
-      if (level == "DEBUG") {
+      if (level == "0") {
         logLevel = DEBUG;
-      } else if (level == "INFO") {
+      } else if (level == "1") {
         logLevel = INFO;
-      } else if (level == "WARNING") {
+      } else if (level == "2") {
         logLevel = WARNING;
-      } else if (level == "ERROR") {
+      } else if (level == "3") {
         logLevel = ERROR;
       } else {
         sendLog(WARNING, "Received invalid new log level: " + level);
@@ -349,18 +359,31 @@ void loop() {
   window.append(reading);
   int average = window.average();
 
+  sendLog(DEBUG, "Reading: " + String(reading) + " Average: " + String(window.average()));
+
   // we must allow window to fill in order for our average calculation to be useful
   if (window.size() != WINDOW_SIZE) {
-    sendLog(DEBUG, "Calibrating - Window not yet filled.");
+    sendLog(DEBUG, "Calibrating " + String(window.size()) + "/" + String(WINDOW_SIZE) + "Current avg.: " + String(window.average()));
     delay(DELAY);
+
+    Serial.println("----------------------------------------");
     return;
   }
 
   const int percentDiff = percentDifference(reading, average);
+
+  if (percentDiff > 100) {
+    // something triggered further away, we ignore this for now.
+    sendLog(DEBUG, "Percent difference " + String(percentDiff) + " > 100, ignoring.");
+    delay(DELAY);
+
+    Serial.println("----------------------------------------");
+    return;
+  }
   
   if (runDetection == false && percentDiff >= PERCENT_DIFF_TRIGGER) {
     runDetection = true;
-    sendLog(INFO, "Reading % difference:" + String(percentDiff) + " Starting detection.");
+    sendLog(INFO, "Reading % difference: " + String(percentDiff) + " Starting detection.");
   }
 
   if (runDetection && detection.size() == 0) {
@@ -379,7 +402,10 @@ void loop() {
     // Window is full...Check if conditions are right for a trigger
     sendLog(DEBUG, "Detection window full.");
     runDetection = false;
-    if (percentDifference(detection.average(), window.average()) > PERCENT_DIFF_TRIGGER) {
+    const bool isTrigger = percentDifference(detection.average(), window.average()) > PERCENT_DIFF_TRIGGER;
+    sendLog(INFO, "Detection complete. isTrigger: " + String(isTrigger));
+
+    if (isTrigger) {
       // TRIGGER
       currentTimeInterval = millis() - prevTriggerMillis;
       sendTrigger(currentTimeInterval);
@@ -390,6 +416,7 @@ void loop() {
     } // we have a fluke, ignore
   }
   
+  Serial.println("----------------------------------------");
   delay(DELAY);
 
   // Serial.println("-------------------------------------");
