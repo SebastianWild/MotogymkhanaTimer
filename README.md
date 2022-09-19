@@ -22,7 +22,11 @@ Assemble the above, flash the logic using PlatformIO, then set up your favorite 
 
 ## Controls Overview
 
-Once running, the ESP8266 will expose a webpage at `http://http://192.168.4.1/`. The [EventSource](https://developer.mozilla.org/en-US/docs/Web/API/EventSource) API is used to stream data to the client.  
+Once running, connect to the ESP8266's WiFi network:
+- SSID: `ESP8266 Timer`
+- Password: `motogymkhana`
+
+Then, navigate to `http://http://192.168.4.1/` where you can see the lap time and change settings.  
 
 ![Screenshot of the configuration & display webpage](Docs\Images\webpage.png)
 
