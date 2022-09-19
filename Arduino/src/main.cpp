@@ -28,10 +28,11 @@ int AFTER_DETECTION_DELAY = 2000;   // Delay after detecting something moving ac
 RollingWindow window(WINDOW_SIZE);
 RollingWindow detection(DETECTION_SIZE);
 
-long currentTimeInterval = 0;   // msec
+long lastMatchedTriggerMillis = 0;   // msec
 
 bool run = false;
-long prevTriggerMillis = 0;
+long potentialTriggerMillis = 0;
+long firstTriggerMillis = 0;
 bool runDetection = false;
 
 int DELAY = 100;    // msec to delay between readings
@@ -180,7 +181,7 @@ LogLevel logLevel = INFO;
 /// @param message The message
 void sendLog(LogLevel level, String message) {
   Serial.println(message);
-  if (logLevel < level) {
+  if (logLevel <= level) {
     events.send(message.c_str(), "log", millis());
   }
 }
@@ -191,15 +192,16 @@ void restart() {
   runDetection = false;
   detection.clear();
   window.clear();
-  prevTriggerMillis = 0;
-  currentTimeInterval = 0;
+  firstTriggerMillis = 0;
+  potentialTriggerMillis = 0;
+  lastMatchedTriggerMillis = 0;
 }
 
 /// Simple templating engine processor.
 /// See: https://github.com/me-no-dev/ESPAsyncWebServer#template-processing
 String templateProcessor(const String& var) {
   if (var == "TIMEINTERVAL") {
-    return String(currentTimeInterval);
+    return String(lastMatchedTriggerMillis);
   } else if (var == "DELAY") {
     return String(DELAY);
   } else if (var == "STEP") {
@@ -341,7 +343,7 @@ void setup() {
   
   // EventSource setup
   events.onConnect([](AsyncEventSourceClient *client) {
-    client -> send(String(currentTimeInterval).c_str(), NULL, millis(), 1000);
+    client -> send(String(lastMatchedTriggerMillis).c_str(), NULL, millis(), 1000);
   });
   server.addHandler(&events);
   server.begin();
@@ -356,13 +358,13 @@ void loop() {
   long timeSinceBoot = millis();
 
   int reading = ultrasonic.MeasureInCentimeters();
-  window.append(reading);
   int average = window.average();
 
   sendLog(DEBUG, "Reading: " + String(reading) + " Average: " + String(window.average()));
 
   // we must allow window to fill in order for our average calculation to be useful
   if (window.size() != WINDOW_SIZE) {
+    window.append(reading);
     sendLog(DEBUG, "Calibrating " + String(window.size()) + "/" + String(WINDOW_SIZE) + "Current avg.: " + String(window.average()));
     delay(DELAY);
 
@@ -372,13 +374,17 @@ void loop() {
 
   const int percentDiff = percentDifference(reading, average);
 
-  if (percentDiff > 100) {
-    // something triggered further away, we ignore this for now.
-    sendLog(DEBUG, "Percent difference " + String(percentDiff) + " > 100, ignoring.");
-    delay(DELAY);
+  // if (percentDiff > 100) {
+  //   // something triggered further away, we ignore this for now.
+  //   sendLog(DEBUG, "Percent difference " + String(percentDiff) + " > 100, ignoring.");
+  //   delay(DELAY);
 
-    Serial.println("----------------------------------------");
-    return;
+  //   Serial.println("----------------------------------------");
+  //   return;
+  // }
+
+  if (runDetection == false) {
+    window.append(reading);
   }
   
   if (runDetection == false && percentDiff >= PERCENT_DIFF_TRIGGER) {
@@ -389,7 +395,7 @@ void loop() {
   if (runDetection && detection.size() == 0) {
     // Initial measurement. Start rolling window to see if we actually have a trigger
     runDetection = true;
-    prevTriggerMillis = timeSinceBoot;
+    potentialTriggerMillis = timeSinceBoot;
     detection.append(reading);
     
     sendLog(DEBUG, "Potential trigger. Starting stopwatch. Starting detection phase.");
@@ -400,20 +406,30 @@ void loop() {
     sendLog(DEBUG, String("Detection ") + String(detection.size()) + String("/") + String(DETECTION_SIZE));
   } else if (runDetection && detection.size() >= DETECTION_SIZE) {
     // Window is full...Check if conditions are right for a trigger
-    sendLog(DEBUG, "Detection window full.");
     runDetection = false;
-    const bool isTrigger = percentDifference(detection.average(), window.average()) > PERCENT_DIFF_TRIGGER;
+    int percentDiff = percentDifference(detection.average(), window.average());
+    const bool isTrigger = percentDiff > PERCENT_DIFF_TRIGGER;
+    sendLog(INFO, "Average detection distance: " + String(detection.average()) + " Current avg.: " + String(window.average()) + "  Diff: " + String(percentDiff) + "%");
     sendLog(INFO, "Detection complete. isTrigger: " + String(isTrigger));
+    // We must clear the detection window so we do not immediately register the next close reading as a trigger
+    detection.clear();
 
-    if (isTrigger) {
-      // TRIGGER
-      currentTimeInterval = millis() - prevTriggerMillis;
-      sendTrigger(currentTimeInterval);
-      sendLog(INFO, String("Trigger! ") + String("Detection average: ") + String(detection.average()) + String(" Window average: ") + String(window.average()));
-      prevTriggerMillis = 0;
+    if (isTrigger && firstTriggerMillis == 0) {
+      sendLog(INFO, "Trigger 1/2");
+      firstTriggerMillis = potentialTriggerMillis;
+    } else if (isTrigger && firstTriggerMillis != 0) {
+      // MATCHED TRIGGER
+      lastMatchedTriggerMillis = millis() - firstTriggerMillis;
+      sendTrigger(lastMatchedTriggerMillis);
+      sendLog(INFO, String("Trigger 2/2: Time between triggers: ") + String(lastMatchedTriggerMillis) + " msec");
+      potentialTriggerMillis = 0;
+      firstTriggerMillis = 0;
 
       delay(AFTER_DETECTION_DELAY);
-    } // we have a fluke, ignore
+    } else {
+      // fluke, discard potential trigger
+      potentialTriggerMillis = 0;
+    }
   }
   
   Serial.println("----------------------------------------");
