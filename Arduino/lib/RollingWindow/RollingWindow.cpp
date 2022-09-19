@@ -28,6 +28,7 @@ int RollingWindow::average() {
 void RollingWindow::clear() {
     SinglyLinkedList* old = storage;
     storage = new SinglyLinkedList;
+    total = 0;
 
     delete old;
 }
