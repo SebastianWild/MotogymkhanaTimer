@@ -180,7 +180,7 @@ LogLevel logLevel = INFO;
 /// @param message The message
 void sendLog(LogLevel level, String message) {
   Serial.println(message);
-  if (logLevel >= level) {
+  if (logLevel < level) {
     events.send(message.c_str(), "log", millis());
   }
 }
