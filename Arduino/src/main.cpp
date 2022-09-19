@@ -5,15 +5,6 @@
 #include "RollingWindow.h"
 
 /*
-Core concepts:
-- EventSource for sending messages to client
-- Button on client & API here to start/stop timing
-- Logic for knowing when threshold is crossed:
-    - Establish baseline distance
-    - pause reading for a few seconds
-*/
-
-/*
 * Constants
 */
 
