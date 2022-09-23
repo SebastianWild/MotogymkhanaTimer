@@ -68,12 +68,12 @@ const char index_html[] PROGMEM = R"rawLiteral(
     <h2>Lap Timer</h2>
     <p>
       <span>Last Trigger</span>
-      <span id="lasttrigger">%TIMEINTERVAL% sec</span>
+      <h1><span id="lasttrigger">%TIMEINTERVAL% sec</span></h1>
       <br>
       <br>
       <button id="btn_startstop" type="button">%STARTSTOP%</button>
       <h3>Settings</h3>
-      <form action="/update" method="post">
+      <form action="/parameters" method="post">
         <label>Ranging Interval (msec)</label>
         <input type="number" id="ranging-interval" name="interval" value="%DELAY%" step="%STEP%" max="%MAX_DELAY%" min="%MIN_DELAY%">
         <br>
@@ -111,7 +111,7 @@ const char index_html[] PROGMEM = R"rawLiteral(
   <script>
     document.getElementById("btn_startstop").addEventListener("click", () => {
         let xhr = new XMLHttpRequest(), data = "start=toggle";
-        xhr.open('POST', '/update')
+        xhr.open('POST', '/parameters')
         xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
         xhr.send(data)
 
@@ -235,7 +235,7 @@ void setup() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
       request -> send_P(200, "text/html", index_html, templateProcessor);
   });
-  server.on("/update", HTTP_POST, [](AsyncWebServerRequest *request) {
+  server.on("/parameters", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (request -> hasParam("interval", true)) {
       AsyncWebParameter* p = request->getParam("interval", true);
       
@@ -330,6 +330,20 @@ void setup() {
       }
       sendLog(INFO, "Set new log level: " + level);
     }
+  });
+  server.on("/parameters", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String formData = "";
+    formData += "TIMEINTERVAL=" + String(lastMatchedTriggerMillis) + "\n";
+    formData += "DELAY=" + String(DELAY) + "\n";
+    formData += "MAX_DELAY=" + String(MAX_DELAY) + "\n";
+    formData += "MIN_DELAY=" + String(MIN_DELAY) + "\n";
+    formData += "STARTSTOP=" + run ? "Start" : "Stop" + String("\n");
+    formData += "WINDOW_SIZE=" + String(WINDOW_SIZE) + "\n";
+    formData += "DETECTION_SIZE=" + String(DETECTION_SIZE) + "\n";
+    formData += "PERCENT_DIFF_TRIGGER=" + String(PERCENT_DIFF_TRIGGER) + "\n";
+    formData += "AFTER_DETECTION_DELAY=" + String(AFTER_DETECTION_DELAY) + "\n";
+    formData += "DEBUGLOGLEVEL=" + String(logLevel) + "\n";
+    request -> send(200, "text/plain", formData);
   });
   
   // EventSource setup
